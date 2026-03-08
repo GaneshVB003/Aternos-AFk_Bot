@@ -36,7 +36,7 @@ if (RENDER_URL) {
 const BOT_CONFIG = {
   host: 'mongombo.aternos.me',
   port: 50532,
-  username: 'Iamheretokeepserveronline',
+  username: 'Huccha',
   version: false,
   auth: 'offline'
 };
@@ -216,7 +216,7 @@ function createBot() {
 
   bot.on('stoppedAttacking', () => { if (guardPos) moveToGuardPos(); });
 
-  bot.on('physicTick', () => {
+  bot.on('physicsTick', () => {
     if (!bot || !guardPos || !bot.pvp) return;
     const mob = bot.nearestEntity(e =>
       e.type === 'mob' &&
