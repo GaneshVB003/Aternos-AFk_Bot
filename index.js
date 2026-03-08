@@ -24,7 +24,7 @@ server.listen(PORT, () => console.log(`✅ Web server on port ${PORT}`));
 const BOT_CONFIG = {
   host: 'mongombo.aternos.me',
   port: 50532,
-  username: 'Huccha',
+  username: 'Iamheretokeeptheserveronline',
   version: false,
   auth: 'offline'
 };
