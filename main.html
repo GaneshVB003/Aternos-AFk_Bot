@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Minecraft Bot Control</title>
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #1a1a2e;
+      color: #eee;
+      font-family: 'Segoe UI', sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    h1 { font-size: 1.8rem; margin-bottom: 6px; color: #4ecca3; }
+    p.sub { color: #888; margin-bottom: 24px; font-size: 0.9rem; }
+    .card {
+      background: #16213e;
+      border-radius: 12px;
+      padding: 24px;
+      width: 100%;
+      max-width: 480px;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    }
+    .status-box {
+      background: #0f3460;
+      border-radius: 8px;
+      padding: 14px;
+      min-height: 60px;
+      margin-bottom: 20px;
+      font-size: 0.95rem;
+      line-height: 1.5;
+      word-break: break-word;
+    }
+    .buttons { display: flex; gap: 10px; }
+    button {
+      flex: 1;
+      padding: 12px;
+      border: none;
+      border-radius: 8px;
+      font-size: 1rem;
+      cursor: pointer;
+      font-weight: 600;
+      transition: opacity 0.2s;
+    }
+    button:hover { opacity: 0.85; }
+    #btnStart     { background: #4ecca3; color: #1a1a2e; }
+    #btnStop      { background: #e94560; color: #fff; }
+    #btnReconnect { background: #f5a623; color: #1a1a2e; }
+    .log {
+      margin-top: 20px;
+      background: #0a0a1a;
+      border-radius: 8px;
+      padding: 12px;
+      height: 180px;
+      overflow-y: auto;
+      font-size: 0.8rem;
+      color: #aaa;
+      font-family: monospace;
+    }
+    .log p { margin-bottom: 4px; }
+  </style>
+</head>
+<body>
+  <h1>⛏️ MC Bot Control</h1>
+  <p class="sub">mongombo.aternos.me</p>
+  <div class="card">
+    <div class="status-box" id="status">Connecting to control panel...</div>
+    <div class="buttons">
+      <button id="btnStart"     onclick="send('start')">▶ Start</button>
+      <button id="btnStop"      onclick="send('stop')">■ Stop</button>
+      <button id="btnReconnect" onclick="send('reconnect')">↺ Reconnect</button>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const socket = io();
+    const statusEl = document.getElementById('status');
+    const logEl = document.getElementById('log');
+
+    function send(cmd) { socket.emit('control_bot', cmd); }
+
+    socket.on('bot_status', (msg) => {
+      statusEl.textContent = msg;
+      const p = document.createElement('p');
+      const time = new Date().toLocaleTimeString();
+      p.textContent = `[${time}] ${msg}`;
+      logEl.appendChild(p);
+      logEl.scrollTop = logEl.scrollHeight;
+    });
+  </script>
+</body>
+</html>
