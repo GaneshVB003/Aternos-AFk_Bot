@@ -13,18 +13,30 @@ const io = socketIo(server);
 
 app.use(express.static(path.join(__dirname, '')));
 app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'main.html')));
-
-// Health check endpoint — required for Render to keep service alive
 app.get('/health', (req, res) => res.send('OK'));
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log(`✅ Web server on port ${PORT}`));
 
+// ---- Self-ping to prevent Render spin-down ----
+// Render automatically sets RENDER_EXTERNAL_URL — no config needed
+const RENDER_URL = process.env.RENDER_EXTERNAL_URL || '';
+if (RENDER_URL) {
+  setInterval(() => {
+    http.get(`${RENDER_URL}/health`, (res) => {
+      console.log(`📡 Self-ping OK: ${res.statusCode}`);
+    }).on('error', (err) => {
+      console.error('📡 Self-ping failed:', err.message);
+    });
+  }, 14 * 60 * 1000); // every 14 minutes
+  console.log(`📡 Self-ping active → ${RENDER_URL}`);
+}
+
 // ---- Bot config ----
 const BOT_CONFIG = {
   host: 'mongombo.aternos.me',
   port: 50532,
-  username: 'Iamheretokeeptheserveronline',
+  username: 'Huccha',
   version: false,
   auth: 'offline'
 };
@@ -35,10 +47,8 @@ let bot = null;
 let reconnectTimer = null;
 let reconnectAttempts = 0;
 let manualStop = false;
-
-// AFK timers
 let afkMoveInterval = null;
-let afkSwingInterval = null;
+let afkLookInterval = null;
 let afkSneakInterval = null;
 
 const MAX_RECONNECT = 15;
@@ -50,46 +60,35 @@ function emitStatus(msg) {
 }
 
 // ---- AFK Prevention ----
-// Uses multiple techniques so Aternos anti-AFK doesn't catch it
-
 function startAFK() {
-  stopAFK(); // clear any existing
-
-  // 1. Walk back and forth every 30s
+  stopAFK();
+  // Walk in random direction every 30s
   afkMoveInterval = setInterval(() => {
     if (!bot || !bot.entity) return;
-    const directions = ['forward', 'back', 'left', 'right'];
-    const dir = directions[Math.floor(Math.random() * directions.length)];
+    const dirs = ['forward', 'back', 'left', 'right'];
+    const dir = dirs[Math.floor(Math.random() * dirs.length)];
     bot.setControlState(dir, true);
-    setTimeout(() => {
-      if (!bot) return;
-      bot.setControlState(dir, false);
-    }, 1000 + Math.random() * 500);
+    setTimeout(() => { if (bot) bot.setControlState(dir, false); }, 1000 + Math.random() * 500);
   }, 30000);
 
-  // 2. Random look direction every 15s
-  afkSwingInterval = setInterval(() => {
+  // Look around + swing arm every 15s
+  afkLookInterval = setInterval(() => {
     if (!bot || !bot.entity) return;
-    const yaw   = (Math.random() * Math.PI * 2) - Math.PI;
-    const pitch = (Math.random() * 0.6) - 0.3;
-    bot.look(yaw, pitch, true);
-    // Swing arm (mimics activity)
+    bot.look((Math.random() * Math.PI * 2) - Math.PI, (Math.random() * 0.6) - 0.3, true);
     bot.swingArm();
   }, 15000);
 
-  // 3. Sneak toggle every 45s
+  // Sneak toggle every 45s
   afkSneakInterval = setInterval(() => {
     if (!bot || !bot.entity) return;
     bot.setControlState('sneak', true);
     setTimeout(() => { if (bot) bot.setControlState('sneak', false); }, 800);
   }, 45000);
-
-  emitStatus('🔄 AFK prevention active');
 }
 
 function stopAFK() {
   if (afkMoveInterval)  { clearInterval(afkMoveInterval);  afkMoveInterval = null; }
-  if (afkSwingInterval) { clearInterval(afkSwingInterval); afkSwingInterval = null; }
+  if (afkLookInterval)  { clearInterval(afkLookInterval);  afkLookInterval = null; }
   if (afkSneakInterval) { clearInterval(afkSneakInterval); afkSneakInterval = null; }
 }
 
@@ -150,7 +149,6 @@ function createBot() {
 
   let guardPos = null;
 
-  // Auto-login (AuthMe / NLogin)
   bot.on('messagestr', (msg) => {
     const lower = msg.toLowerCase();
     if (lower.includes('/register') || lower.includes('please register')) {
@@ -169,7 +167,6 @@ function createBot() {
     startAFK();
   });
 
-  // Auto-eat
   bot.on('health', () => {
     if (!bot || bot.food >= 18) return;
     const food = bot.inventory.items().find(item =>
@@ -180,7 +177,6 @@ function createBot() {
     if (food) bot.equip(food, 'hand').then(() => bot.consume()).catch(() => {});
   });
 
-  // Auto-equip
   bot.on('playerCollect', (collector) => {
     if (!bot || collector.username !== bot.username) return;
     setTimeout(() => {
@@ -195,7 +191,6 @@ function createBot() {
     }, 400);
   });
 
-  // Guard
   function guardArea(pos) {
     guardPos = pos.clone();
     emitStatus(`🛡️ Guarding ${Math.floor(guardPos.x)}, ${Math.floor(guardPos.y)}, ${Math.floor(guardPos.z)}`);
@@ -231,17 +226,14 @@ function createBot() {
     if (mob) bot.pvp.attack(mob);
   });
 
-  // Chat commands
   bot.on('chat', (username, message) => {
     if (!bot || username === bot.username) return;
     const player = bot.players[username];
     if (message === 'guard') {
       if (!player?.entity) { bot.chat(`Can't see you, ${username}!`); return; }
-      bot.chat('🛡️ Guarding!');
-      guardArea(player.entity.position);
+      bot.chat('🛡️ Guarding!'); guardArea(player.entity.position);
     } else if (message === 'stop') {
-      bot.chat('🛑 Stopped.');
-      stopGuarding();
+      bot.chat('🛑 Stopped.'); stopGuarding();
     } else if (message === 'come') {
       if (!player?.entity) { bot.chat(`Can't see you!`); return; }
       guardArea(player.entity.position);
@@ -262,14 +254,12 @@ function createBot() {
     let msg = reason;
     try { msg = JSON.parse(reason).text || reason; } catch (_) {}
     emitStatus(`👢 Kicked: ${msg}`);
-    stopAFK(); bot = null;
-    scheduleReconnect();
+    stopAFK(); bot = null; scheduleReconnect();
   });
 
   bot.on('end', (reason) => {
     emitStatus(`🔌 Disconnected${reason ? ': ' + reason : ''}`);
-    stopAFK(); bot = null;
-    scheduleReconnect();
+    stopAFK(); bot = null; scheduleReconnect();
   });
 }
 
