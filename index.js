@@ -34,9 +34,9 @@ if (RENDER_URL) {
 
 // ---- Bot config ----
 const BOT_CONFIG = {
-  host: 'mongombo.aternos.me',
-  port: 50532,
-  username: 'iamheretokeepserveronline',
+  host: process.env.MC_HOST || 'mongombo.aternos.me',
+  port: parseInt(process.env.MC_PORT) || 50532,
+  username: 'Huccha',
   version: false,
   auth: 'offline'
 };
